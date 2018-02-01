@@ -1,70 +1,104 @@
 const form = document.getElementById('vote-form');
 
 // Form Submit Event
+form.addEventListener('submit', e => {
+  // check Local Storage to see if `hasVoted` key already stored
+  if(window.localStorage.getItem('hasVoted')) {
+    $('#hasVotedAlreadyErrorMsg').removeClass('hidden');
+    e.preventDefault();
+  } else {
+    // set Local Storage to show the user has voted already
+    window.localStorage.setItem('hasVoted', true)
 
-form.addEventListener('submit', (e) => {
-  const choice = document.querySelector('input[name=os]:checked')
-  .value;
-  const data = { os: choice };
+    const choice = document.querySelector('input[name=os]:checked').value;
+    const data = { os: choice };
 
-  fetch('http://localhost:3000/poll', {
-    method: 'post',
-    body: JSON.stringify(data),
-    headers: new Headers({
-      'Content-Type': 'application-json'
+    fetch('http://localhost:3000/poll', {
+      method: 'post',
+      body: JSON.stringify(data),
+      headers: new Headers({
+        'Content-Type': 'application/json'
+      })
     })
-  })
-    .then(res => res.json())
-    .then(data => console.log(data))
-    .catch(err => console.log(err));
-  
-  e.preventDefault();
+      .then(res => res.json())
+      .then(data => console.log(data))
+      .catch(err => console.log(err));
+      e.preventDefault();
+  }
 });
 
-let dataPoints = [
-  { label: 'Windows', y: 0 },
-  { label: 'MacOS', y: 0 },
-  { label: 'Linux', y: 0 },
-  { label: 'Other', y: 0 }
-];
+fetch('http://localhost:3000/poll')
+  .then(res => res.json())
+  .then(data => {
+    const votes = data.votes;
+    const totalVotes = votes.length;
+    document.querySelector('#chartTitle').textContent = `Total Votes: ${totalVotes}`;
 
-const chartContainer = document.querySelector('#chartContainer');
+    // Refresh the Total Votes every 2 seconds
+    setInterval(() => {
+      fetch('http://localhost:3000/poll')
+        .then(res => res.json())
+        .then(data => document.querySelector('#chartTitle').textContent = `Total Votes: ${data.votes.length}`)
+        .catch(err => console.log(err));
+    }, 2000);
 
-if (chartContainer) {
-  const chart = new CanvasJS.Chart('chartContainer', {
-    animationEnabled: true,
-    theme: 'theme1',
-    title: {
-      text: 'OS Results'
-    },
-    data: [
-      {
-        type: 'column',
-        dataPoints: dataPoints
-      }
-    ]
-  });
-  chart.render();
+    // Count vote points - acc/current
+    const voteCounts = votes.reduce(
+      (acc, vote) => (
+        (acc[vote.os] = (acc[vote.os] || 0) + parseInt(vote.points)), acc
+      ),
+      {}
+    );
 
-  // Enable pusher logging - don't include this in production
-  
-    Pusher.logToConsole = true;
+    // Set initial Data Points
+    if (Object.keys(voteCounts).length === 0 && voteCounts.constructor === Object) {
+      voteCounts.Windows = 0;
+      voteCounts.MacOS = 0;
+      voteCounts.Linux = 0;
+      voteCounts.Other = 0;
+    }
 
-    var pusher = new Pusher('1d832592855516476586', {
-      cluster: 'eu',
-      encrypted: true
-    });
+    let dataPoints = [
+      { label: 'Windows', y: voteCounts.Windows },
+      { label: 'MacOS', y: voteCounts.MacOS },
+      { label: 'Linux', y: voteCounts.Linux },
+      { label: 'Other', y: voteCounts.Other }
+    ];
 
-    var channel = pusher.subscribe('os-poll');
-    channel.bind('os-vote', function(data) {
-      dataPoints = dataPoints.map(x => {
-        if (x.label === data.os) {
-          x.y += data.points;
-          return x;
-        } else {
-          return x;
-        }
+    const chartContainer = document.querySelector('#chartContainer');
+
+    if (chartContainer) {
+      const chart = new CanvasJS.Chart('chartContainer', {
+        animationEnabled: true,
+        theme: 'theme1',
+        data: [
+          {
+            type: 'column',
+            dataPoints: dataPoints
+          }
+        ]
       });
       chart.render();
-    });
-}
+
+      // Enable pusher logging - don't include this in production
+      Pusher.logToConsole = true;
+
+      var pusher = new Pusher('55a3916fa22efde02378', {
+        cluster: 'us2',
+        encrypted: true
+      });
+
+      var channel = pusher.subscribe('os-poll');
+      channel.bind('os-vote', function(data) {
+        dataPoints = dataPoints.map(x => {
+          if (x.label == data.os) {
+            x.y += data.points;
+            return x;
+          } else {
+            return x;
+          }
+        });
+        chart.render();
+      });
+    }
+  });

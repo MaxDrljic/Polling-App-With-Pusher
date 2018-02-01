@@ -3,6 +3,9 @@ const path = require('path');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 
+// DB Config
+require('./config/db');
+
 const app = express();
 
 // Routes
@@ -13,14 +16,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Body Parser
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({extended: false}));
+app.use(bodyParser.urlencoded({ extended: false }));
 
 // Enable CORS
 app.use(cors());
 
 app.use('/poll', poll);
 
-// Start Server
-app.listen(3000, () => {
-  console.log('Server started on port 3000');
-});
+const port = 3000;
+
+// Start server
+app.listen(port, () => console.log(`Server started on port ${port}`));
